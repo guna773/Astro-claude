@@ -1,11 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
-import { fetchVoiceChat, fetchTextChat } from '@/lib/api'
+import { fetchTextChat } from '@/lib/api'
 
+// Web Speech API language codes
 const LANGUAGES = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Bengali', 'Marathi']
+const LANG_CODES: Record<string, string> = {
+  English: 'en-IN', Hindi: 'hi-IN', Tamil: 'ta-IN',
+  Telugu: 'te-IN', Kannada: 'kn-IN', Bengali: 'bn-IN', Marathi: 'mr-IN',
+}
 
 const SUGGESTIONS = [
   'How is my career this year?',
@@ -31,6 +36,14 @@ function WaveBar({ delay }: { delay: string }) {
   )
 }
 
+// Extend window type for webkit prefix
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition
+    webkitSpeechRecognition: typeof SpeechRecognition
+  }
+}
+
 export default function ChatPage() {
   const searchParams = useSearchParams()
   const [userId, setUserId] = useState('')
@@ -38,11 +51,12 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [recording, setRecording] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [transcript, setTranscript] = useState('')
+  const [liveTranscript, setLiveTranscript] = useState('') // live interim text while speaking
+  const [transcript, setTranscript] = useState('')          // final transcript shown after
   const [textInput, setTextInput] = useState('')
   const [error, setError] = useState('')
-  const mediaRecorder = useRef<MediaRecorder | null>(null)
-  const audioChunks = useRef<Blob[]>([])
+  const [supported, setSupported] = useState(true)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -50,6 +64,11 @@ export default function ChatPage() {
     setUserId(uid)
     const q = searchParams.get('q')
     if (q) setTextInput(q)
+
+    // Check Web Speech API support
+    if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+      setSupported(false)
+    }
   }, [searchParams])
 
   useEffect(() => {
@@ -69,58 +88,67 @@ export default function ChatPage() {
     } catch { /* ignore */ }
   }
 
-  async function startRecording() {
+  function startRecording() {
     setError('')
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
-      audioChunks.current = []
-      mr.ondataavailable = e => audioChunks.current.push(e.data)
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop())
-        const audioBlob = new Blob(audioChunks.current, { type: 'audio/webm' })
-        await sendVoice(audioBlob)
+    setLiveTranscript('')
+    setTranscript('')
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    const recognition = new SpeechRecognition()
+    recognition.lang = LANG_CODES[language] || 'en-IN'
+    recognition.interimResults = true   // show text as you speak
+    recognition.maxAlternatives = 1
+    recognition.continuous = false
+
+    recognition.onresult = (event) => {
+      let interim = ''
+      let final = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript
+        if (event.results[i].isFinal) final += t
+        else interim += t
       }
-      mr.start()
-      mediaRecorder.current = mr
-      setRecording(true)
-    } catch {
-      setError('Microphone access denied. Please allow microphone permissions.')
+      setLiveTranscript(interim || final)
+      if (final) setTranscript(final)
     }
+
+    recognition.onend = () => {
+      setRecording(false)
+      // Use the final transcript collected in state
+      setTranscript(prev => {
+        if (prev.trim()) sendTranscript(prev.trim())
+        return prev
+      })
+    }
+
+    recognition.onerror = (event) => {
+      setRecording(false)
+      if (event.error === 'not-allowed') {
+        setError('Microphone access denied. Please allow microphone permissions.')
+      } else if (event.error === 'no-speech') {
+        setError('No speech detected. Please try again.')
+      } else {
+        setError(`Voice error: ${event.error}`)
+      }
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+    setRecording(true)
   }
 
   function stopRecording() {
-    mediaRecorder.current?.stop()
+    recognitionRef.current?.stop()
     setRecording(false)
   }
 
-  const sendVoice = useCallback(async (blob: Blob) => {
+  async function sendTranscript(text: string) {
     if (!userId) { setError('Please complete onboarding first.'); return }
     setLoading(true)
     setError('')
+    setMessages(prev => [...prev, { role: 'user', text }])
     try {
-      const res = await fetchVoiceChat(blob, userId, language)
-      setTranscript(res.transcript)
-      const aiMsg: Message = { role: 'ai', text: res.response_text, audioBase64: res.audio_base64 }
-      setMessages(prev => [...prev, { role: 'user', text: res.transcript }, aiMsg])
-      if (res.audio_base64) playAudio(res.audio_base64)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Voice chat failed.')
-    } finally {
-      setLoading(false)
-    }
-  }, [userId, language])
-
-  async function sendText(msg?: string) {
-    const message = msg || textInput.trim()
-    if (!message) return
-    if (!userId) { setError('Please complete onboarding first.'); return }
-    setLoading(true)
-    setError('')
-    setTextInput('')
-    setMessages(prev => [...prev, { role: 'user', text: message }])
-    try {
-      const res = await fetchTextChat(message, userId, language)
+      const res = await fetchTextChat(text, userId, language)
       const aiMsg: Message = { role: 'ai', text: res.response_text, audioBase64: res.audio_base64 }
       setMessages(prev => [...prev, aiMsg])
       if (res.audio_base64) playAudio(res.audio_base64)
@@ -129,6 +157,13 @@ export default function ChatPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function sendText(msg?: string) {
+    const message = msg || textInput.trim()
+    if (!message) return
+    setTextInput('')
+    await sendTranscript(message)
   }
 
   return (
@@ -154,37 +189,51 @@ export default function ChatPage() {
 
         {/* Mic button */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <button
-            onClick={recording ? stopRecording : startRecording}
-            disabled={loading}
-            style={{
-              width: '100px', height: '100px', borderRadius: '50%',
-              border: `3px solid ${recording ? '#ff4444' : '#c9a84c'}`,
-              backgroundColor: recording ? '#ff444422' : '#c9a84c22',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto',
-              animation: recording ? 'pulse 1.5s ease-in-out infinite' : 'none',
-              transition: 'all 0.3s',
-            }}>
-            {recording ? '⏹' : '🎙️'}
-          </button>
-          <p style={{ color: '#f0eee4aa', fontSize: '0.85rem', marginTop: '0.75rem' }}>
-            {loading ? 'Consulting the stars...' : recording ? 'Recording — tap to stop' : 'Tap to speak'}
-          </p>
-
-          {recording && (
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'center', height: '40px', marginTop: '0.5rem' }}>
-              {['0s', '0.1s', '0.2s', '0.3s', '0.4s'].map((d, i) => (
-                <WaveBar key={i} delay={d} />
-              ))}
+          {!supported ? (
+            <div style={{ padding: '1rem', borderRadius: '8px', backgroundColor: '#ff444422', border: '1px solid #ff4444aa', color: '#ff8888', fontSize: '0.9rem' }}>
+              Voice recognition not supported in this browser. Use Chrome or Edge, or type your question below.
             </div>
-          )}
+          ) : (
+            <>
+              <button
+                onClick={recording ? stopRecording : startRecording}
+                disabled={loading}
+                style={{
+                  width: '100px', height: '100px', borderRadius: '50%',
+                  border: `3px solid ${recording ? '#ff4444' : '#c9a84c'}`,
+                  backgroundColor: recording ? '#ff444422' : '#c9a84c22',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto',
+                  animation: recording ? 'pulse 1.5s ease-in-out infinite' : 'none',
+                  transition: 'all 0.3s',
+                }}>
+                {recording ? '⏹' : '🎙️'}
+              </button>
+              <p style={{ color: '#f0eee4aa', fontSize: '0.85rem', marginTop: '0.75rem' }}>
+                {loading ? 'Consulting the stars...' : recording ? 'Listening — tap to stop' : 'Tap to speak'}
+              </p>
 
-          {transcript && (
-            <div style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', borderRadius: '8px', backgroundColor: '#0d0d22', border: '1px solid #c9a84c33', color: '#f0eee4aa', fontSize: '0.9rem', fontStyle: 'italic' }}>
-              &ldquo;{transcript}&rdquo;
-            </div>
+              {/* Sound wave while recording */}
+              {recording && (
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'center', height: '40px', marginTop: '0.5rem' }}>
+                  {['0s', '0.1s', '0.2s', '0.3s', '0.4s'].map((d, i) => (
+                    <WaveBar key={i} delay={d} />
+                  ))}
+                </div>
+              )}
+
+              {/* Live transcript while speaking */}
+              {(liveTranscript || transcript) && (
+                <div style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', borderRadius: '8px', backgroundColor: '#0d0d22', border: '1px solid #c9a84c33', color: recording ? '#c9a84ccc' : '#f0eee4aa', fontSize: '0.9rem', fontStyle: 'italic', transition: 'color 0.3s' }}>
+                  &ldquo;{recording ? liveTranscript : transcript}&rdquo;
+                </div>
+              )}
+
+              <p style={{ color: '#f0eee4aa', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                Free voice recognition via your browser · No API key needed
+              </p>
+            </>
           )}
         </div>
 
@@ -215,22 +264,32 @@ export default function ChatPage() {
           {messages.map((m, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
               <div style={{
-                maxWidth: '80%', padding: '0.9rem 1.2rem', borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                maxWidth: '80%', padding: '0.9rem 1.2rem',
+                borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                 backgroundColor: m.role === 'user' ? '#c9a84c22' : '#0d0d22',
                 border: `1px solid ${m.role === 'user' ? '#c9a84c55' : '#c9a84c22'}`,
                 fontSize: '0.95rem', lineHeight: 1.6, color: '#f0eee4',
               }}>
-                {m.role === 'ai' && <div style={{ color: '#c9a84c', fontSize: '0.75rem', fontFamily: 'var(--font-cinzel)', marginBottom: '0.4rem' }}>✦ JYOTISH AI</div>}
+                {m.role === 'ai' && (
+                  <div style={{ color: '#c9a84c', fontSize: '0.75rem', fontFamily: 'var(--font-cinzel)', marginBottom: '0.4rem' }}>✦ JYOTISH AI</div>
+                )}
                 {m.text}
                 {m.role === 'ai' && m.audioBase64 && (
                   <button onClick={() => m.audioBase64 && playAudio(m.audioBase64)}
-                    style={{ marginTop: '0.5rem', padding: '0.3rem 0.8rem', borderRadius: '50px', border: '1px solid #c9a84c44', backgroundColor: 'transparent', color: '#c9a84c', cursor: 'pointer', fontSize: '0.8rem' }}>
+                    style={{ marginTop: '0.5rem', padding: '0.3rem 0.8rem', borderRadius: '50px', border: '1px solid #c9a84c44', backgroundColor: 'transparent', color: '#c9a84c', cursor: 'pointer', fontSize: '0.8rem', display: 'block' }}>
                     ▶ Play Again
                   </button>
                 )}
               </div>
             </div>
           ))}
+          {loading && (
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div style={{ padding: '0.9rem 1.2rem', borderRadius: '16px 16px 16px 4px', backgroundColor: '#0d0d22', border: '1px solid #c9a84c22', color: '#c9a84caa', fontSize: '0.9rem' }}>
+                ✦ Consulting the stars...
+              </div>
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
 
