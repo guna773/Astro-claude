@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+.env
+
+# Node
+node_modules/
+.next/
+.env.local
+*.tsbuildinfo
+
+# Misc
+.DS_Store
+*.log

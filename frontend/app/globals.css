@@ -1,0 +1,268 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Custom Scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a1a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #c9a84c, #a07c2a);
+  border-radius: 4px;
+  border: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #e2c97e, #c9a84c);
+}
+
+::-webkit-scrollbar-corner {
+  background: #0a0a1a;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c9a84c #0a0a1a;
+}
+
+/* ─── Base Resets ───────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #0a0a1a;
+  color: #f0eee4;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ─── Page Fade-In ─────────────────────────────────────────────────────────── */
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ─── Pulsing Mic Animation ────────────────────────────────────────────────── */
+@keyframes micPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.7);
+    transform: scale(1);
+  }
+  40% {
+    box-shadow: 0 0 0 20px rgba(201, 168, 76, 0.15);
+    transform: scale(1.05);
+  }
+  70% {
+    box-shadow: 0 0 0 40px rgba(201, 168, 76, 0.05);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 50px rgba(201, 168, 76, 0);
+    transform: scale(1);
+  }
+}
+
+.mic-pulse {
+  animation: micPulse 1.8s ease-out infinite;
+}
+
+/* ─── Sound Wave Bars ──────────────────────────────────────────────────────── */
+@keyframes soundWave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.wave-bar {
+  display: inline-block;
+  width: 4px;
+  height: 32px;
+  margin: 0 2px;
+  background: linear-gradient(180deg, #f0d070, #c9a84c);
+  border-radius: 2px;
+  transform-origin: center bottom;
+}
+
+.wave-bar:nth-child(1) { animation: soundWave 1.2s ease-in-out 0s infinite; }
+.wave-bar:nth-child(2) { animation: soundWave 1.2s ease-in-out 0.15s infinite; }
+.wave-bar:nth-child(3) { animation: soundWave 1.2s ease-in-out 0.3s infinite; }
+.wave-bar:nth-child(4) { animation: soundWave 1.2s ease-in-out 0.45s infinite; }
+.wave-bar:nth-child(5) { animation: soundWave 1.2s ease-in-out 0.6s infinite; }
+.wave-bar:nth-child(6) { animation: soundWave 1.2s ease-in-out 0.45s infinite; }
+.wave-bar:nth-child(7) { animation: soundWave 1.2s ease-in-out 0.3s infinite; }
+
+/* ─── Starfield ────────────────────────────────────────────────────────────── */
+@keyframes twinkle {
+  0%,
+  100% { opacity: 0.2; transform: scale(1); }
+  50%  { opacity: 1;   transform: scale(1.4); }
+}
+
+.star {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  animation: twinkle var(--duration, 3s) ease-in-out var(--delay, 0s) infinite;
+}
+
+/* ─── Gold Shimmer Text ────────────────────────────────────────────────────── */
+@keyframes goldShimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    #c9a84c 0%,
+    #f0d070 30%,
+    #fff8e1 50%,
+    #f0d070 70%,
+    #c9a84c 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: goldShimmer 4s linear infinite;
+}
+
+/* ─── Glass Morphism Card ──────────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(26, 26, 46, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  border-radius: 16px;
+}
+
+.glass-card:hover {
+  border-color: rgba(201, 168, 76, 0.4);
+  box-shadow: 0 0 24px rgba(201, 168, 76, 0.15);
+}
+
+/* ─── Navbar Glass ─────────────────────────────────────────────────────────── */
+.navbar-glass {
+  background: rgba(10, 10, 26, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(201, 168, 76, 0.15);
+}
+
+/* ─── Gold Button ──────────────────────────────────────────────────────────── */
+.btn-gold {
+  background: linear-gradient(135deg, #c9a84c 0%, #f0d070 50%, #c9a84c 100%);
+  background-size: 200% auto;
+  color: #0a0a1a;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-gold:hover {
+  background-position: right center;
+  box-shadow: 0 0 30px rgba(201, 168, 76, 0.5), 0 0 60px rgba(201, 168, 76, 0.3);
+  transform: translateY(-2px);
+}
+
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+/* ─── Input Styles ─────────────────────────────────────────────────────────── */
+.input-gold {
+  background: rgba(10, 10, 26, 0.8);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  color: #f0eee4;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.input-gold:focus {
+  border-color: #c9a84c;
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
+}
+
+.input-gold::placeholder {
+  color: rgba(160, 158, 148, 0.6);
+}
+
+/* ─── Section Divider ──────────────────────────────────────────────────────── */
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c9a84c, transparent);
+  opacity: 0.4;
+}
+
+/* ─── Float Animation ──────────────────────────────────────────────────────── */
+@keyframes floatAnim {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-12px) rotate(1deg); }
+  66%       { transform: translateY(-6px) rotate(-1deg); }
+}
+
+.float-anim {
+  animation: floatAnim 7s ease-in-out infinite;
+}
+
+/* ─── Orbit Ring Animation ─────────────────────────────────────────────────── */
+@keyframes orbitRing {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.orbit-ring {
+  animation: orbitRing 20s linear infinite;
+}
+
+.orbit-ring-reverse {
+  animation: orbitRing 15s linear infinite reverse;
+}
+
+/* ─── Responsive Typography ────────────────────────────────────────────────── */
+.hero-title {
+  font-size: clamp(2rem, 6vw, 5rem);
+  line-height: 1.1;
+}
+
+.section-title {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  line-height: 1.2;
+}
